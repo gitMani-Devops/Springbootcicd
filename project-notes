@@ -1,0 +1,160 @@
+1.Maven Project structure created
+  https://start.spring.io/
+
+
+
+
+
+
+spring-web.jar
+        |
+        └── org
+            └── springframework
+                └── web
+                    └── bind
+                        └── annotation
+                            └── GetMapping.class
+
+
+
+
+2.build one maven project and then test the project locally
+3.then push to GitHub 
+   #git init (stand in src/ and Pom.xml ) this 2 file is enough
+   #git add src/ pom.xml 
+   #git commit src/ pom.xml -m "initial commit"
+   #git remote add origin  https://github.com/gitMan
+   #git push origin main
+   
+ 4.add webhook =>setting ->webhook ->add webhook
+      payload =>http://18.61.71.198:8080/github-webhook/
+       content type =>json
+
+5.build Jenkins pipe line 
+     #triggers ->select GitHub hook trigger
+
+  pipe line script 
+
+
+pipeline{
+     agent any
+        stages {
+            stage('git clone #1') {
+                steps{
+                    git branch:'main',
+                    url: 'https://github.com/gitMani-Devops/Springbootcicd.git'
+                }
+            }
+            stage(' Maven Test #2'){
+                steps {
+                    sh 'mvn test'
+                    echo "maven test completed"
+                }
+            }
+            stage('sonarqube scanner #3'){
+                steps{
+                    withSonarQubeEnv('sonaruser'){
+                        sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.1.2184:sonar'
+                    }
+                }
+            }
+            stage('Quality Gate #4'){
+                steps{
+                    waitForQualityGate abortPipeline:true
+                }
+            }
+            stage('maven build #5'){
+                steps{
+                    sh 'mvn clean package'
+                }
+            }
+            stage('Docker build #6'){
+                steps{
+                    sh '''
+                    pwd
+                    mv target/calculator-0.0.1-SNAPSHOT.war /var/lib/jenkins/workspace
+                    cd ..
+                    pwd
+                    ls
+                    docker build -t calculator:$Version .
+                     rm calculator-0.0.1-SNAPSHOT.war
+                    '''
+                }
+            }
+            stage('push to Docker Hub #7'){
+                steps{
+                    withCredentials([
+                         usernamePassword(
+                            credentialsId: 'Dockerhub',
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS'
+                            )
+                    ]) {
+                    sh ' echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                   sh 'docker tag calculator:$Version manidevops3008/calculator:$Version'
+                   sh 'docker push manidevops3008/calculator:$Version'
+                   sh 'echo $Version'
+                   sh 'docker logout'
+                    }
+                }
+            }
+            stage('final#8'){
+                steps{
+                    sh 'echo success'
+                }
+            }
+            
+        }
+}
+
+
+
+6.install SonarQube and configure jenkins
+    
+  
+
+6.install docker 
+  install docker compose
+  #cmd 1
+  sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-Linux-x86_64" -o /usr/local/bin/docker-compose
+  #cmd 2
+   sudo chmod +x /usr/local/bin/docker-compose
+
+  docker-compose --version  ->verify
+
+  any error showing install library compatibility 
+ #cmd 3 
+   sudo dnf install -y libxcrypt-compat
+
+  because the old Docker Compose 1.29.2 binary was built with an older Linux/Python environment that expects a library called:
+
+
+docker images store docker data directory
+   e:g  /var/lib/docker
+
+
+
+Docker hub password integrate with Jenkins
+ first add password =>managejenkins ->credential ->global ->add credential ->select username with password (PAT key)
+
+
+   withCredentials([
+    usernamePassword(
+        credentialsId: 'Dockerhub',
+        usernameVariable: 'DOCKER_USER',
+        passwordVariable: 'DOCKER_PASS'
+    )
+])
+
+#withCredentials -> is a Jenkins Pipeline step.
+#usernamePassword ->This tells Jenkins what type of credential you want to use.
+#credentialsId -> This tells Jenkins which credential to use.
+#take the username from my Dockerhub credential and put it into a temporary environment variable called DOCKER_USER."
+
+
+in Jenkins Parameter need to pass version variable
+
+
+
+
+
